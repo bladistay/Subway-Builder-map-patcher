@@ -30,6 +30,24 @@
         }
     };
 
+    const findFilesSafe = (root, targetName) => {
+        const found = [];
+        const stack = [root];
+        while (stack.length) {
+            const cur = stack.pop();
+            let st;
+            try { st = statSync(cur); } catch (_) { continue; }
+            if (st.isDirectory()) {
+                let items;
+                try { items = readdirSync(cur); } catch (_) { continue; }
+                for (const it of items) stack.push(path.join(cur, it));
+            } else {
+                if (path.basename(cur).toLowerCase() === targetName.toLowerCase()) found.push(cur);
+            }
+        }
+        return found;
+    };
+
     const main = async () => {
         const workDir = path.resolve(process.cwd(), 'patching_working_directory');
         if (existsSync(workDir)) rmSync(workDir, { recursive: true, force: true });
@@ -50,8 +68,29 @@
                 chmodSync(appImageDst, 0o755);
                 execSync(`${appImageDst} --appimage-extract`, { cwd: workDir });
             } else if (config.platform === 'windows') {
-                const src = path.resolve(config.subwaybuilderLocation || config.location || '');
+                let src = path.resolve(config.subwaybuilderLocation || config.location || '');
                 if (!existsSync(src)) throwError('Windows install path not found');
+                try {
+                    const s = statSync(src);
+                    if (s.isFile()) {
+                        // If user pointed to the exe (or installer), try using its parent folder if it looks like the game install
+                        const parent = path.dirname(src);
+                        if (existsSync(parent) && statSync(parent).isDirectory()) {
+                            const parentFiles = readdirSync(parent).map(f => f.toLowerCase());
+                            const looksLikeInstall = parentFiles.includes('resources') || parentFiles.some(f => f.includes('subway') || f.endsWith('.exe'));
+                            if (looksLikeInstall) {
+                                src = parent;
+                            } else {
+                                throwError(`Windows install path points to a file (${src}). Set config.subwaybuilderLocation to the installed game folder (e.g. "C:\\\\Program Files\\\\Subway Builder").`);
+                            }
+                        } else {
+                            throwError(`Windows install path points to a file (${src}) and its parent is not a usable folder.`);
+                        }
+                    }
+                } catch (e) {
+                    throwError('Failed to stat Windows install path', e);
+                }
+                // copy directory content into working dir
                 cpSync(src, path.join(workDir, 'squashfs-root'), { recursive: true });
             } else if (config.platform === 'macos') {
                 const src = path.resolve(config.subwaybuilderLocation || config.location || '');
@@ -70,12 +109,37 @@
         }
 
         const squashRoot = path.join(workDir, 'squashfs-root');
+
+        // If the copy produced a non-directory (e.g. user pointed to a single file), give a clearer message
+        if (existsSync(squashRoot) && !statSync(squashRoot).isDirectory()) {
+            throwError(`Expected "${squashRoot}" to be a directory but it's a file. Make sure config.subwaybuilderLocation points to the installed game folder (not an installer/exe).`);
+        }
+
+        // try common locations first, then fall back to searching inside the extracted tree
         let appAsarPath = path.join(squashRoot, 'resources', 'app.asar');
         if (!existsSync(appAsarPath)) {
             const alt = path.join(squashRoot, 'App', 'resources', 'app.asar');
             if (existsSync(alt)) appAsarPath = alt;
         }
-        if (!existsSync(appAsarPath)) throwError('app.asar not found in extracted game');
+
+        // fallback: search the whole workDir for any app.asar files (safe traversal)
+        if (!existsSync(appAsarPath)) {
+            const found = findFilesSafe(workDir, 'app.asar');
+            if (found.length > 0) {
+                appAsarPath = found[0];
+                console.warn(`Found app.asar at ${appAsarPath}`);
+            }
+        }
+
+        if (!existsSync(appAsarPath)) {
+            // helpful diagnostic listing to help user fix config.path
+            let listing = '';
+            try {
+                const top = readdirSync(workDir);
+                listing = top.join(', ');
+            } catch (_) { listing = '(could not list workDir)'; }
+            throwError(`app.asar not found in extracted game. Searched: ${path.join(squashRoot, 'resources', 'app.asar')} and ${path.join(squashRoot, 'App', 'resources', 'app.asar')}. Work dir contents: ${listing}`);
+        }
 
         const extractedAsarDir = path.join(workDir, 'extracted-asar');
         ensureDir(extractedAsarDir);

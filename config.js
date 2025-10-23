@@ -3,13 +3,13 @@ const config = {
 
     /*
     ORIGINAL (not modified) game application location on disk should be specified here.
-    On Windows, it might look like "C:\\Program Files\\Subway Builder\\Subway Builder.exe"
+    On Windows, it might look like "C://Users/YOUR_USER/AppData/Local/Programs/Subway Builder/Subway Builder.exe"
     On Linux, it might look like "/usr/bin/subway-builder"
     On macOS, it might look like "/Applications/Subway Builder.app"
      */
-    "location": "/Applications/Subway Builder.app",
+    "location": "C://Users/YOUR_USER/AppData/Local/Programs/Subway Builder/Subway Builder.exe",
     // Platform can be "windows", "macos", or "linux"
-    "platform": "macos",
+    "platform": "windows",
     /*
     List of places (your cities) available in the game.
     Each place should have:

@@ -7,6 +7,8 @@
   import { createParseStream } from 'big-json';
   import { encode as msgpackEncode } from '@msgpack/msgpack';
 
+  const DEBUG = process.env.DEBUG === '1' || process.env.DEBUG === 'true';
+
   const convertBbox = (bbox) => [bbox[1], bbox[0], bbox[3], bbox[2]];
 
   const generateTiles = (bbox, maxTileSize = 0.5) => {
@@ -63,9 +65,33 @@
         });
 
         await new Promise((resolve, reject) => {
-          parseStream.on('end', resolve);
-          parseStream.on('error', reject);
-          Readable.fromWeb(res.body).pipe(parseStream);
+          const src = Readable.fromWeb(res.body);
+          let settled = false;
+
+          const cleanup = () => {
+            if (settled) return;
+            settled = true;
+            src.removeListener('error', onError);
+            parseStream.removeListener('error', onError);
+            parseStream.removeListener('end', onEnd);
+          };
+
+          const onError = (err) => {
+            cleanup();
+            try { parseStream.destroy(err); } catch (e) {}
+            reject(err);
+          };
+
+          const onEnd = () => {
+            cleanup();
+            resolve();
+          };
+
+          parseStream.on('end', onEnd);
+          parseStream.on('error', onError);
+          src.on('error', onError);
+
+          src.pipe(parseStream);
         });
 
         return parsedData;
@@ -126,14 +152,15 @@
         try {
           const data = await runQueryWithRetry(buildQuery());
           return data.elements || [];
-        } catch (_) {
+        } catch (err) {
           return [];
         }
       }
 
       try {
         const data = await runQueryWithRetry(buildQuery());
-        if (data.elements.length === 0 && tileArea > 0.1) {
+        const count = (data.elements || []).length;
+        if (count === 0 && tileArea > 0.1) {
           const midLon = (tile[0] + tile[2]) / 2;
           const midLat = (tile[1] + tile[3]) / 2;
           const subtiles = [
@@ -151,7 +178,7 @@
           return results;
         }
         return data.elements || [];
-      } catch (_) {
+      } catch (err) {
         if (tileArea > 0.1) {
           const midLon = (tile[0] + tile[2]) / 2;
           const midLat = (tile[1] + tile[3]) / 2;
@@ -231,9 +258,11 @@
     if (perfConfig.tryFullBboxFirst && !skipFullDownload) {
       try {
         const data = await runQueryWithRetry(roadQueryBuilder(bbox), 1);
-        if (data.elements.length === 0) return processRoads(await fetchDataTiled(bbox, perfConfig.overpassTileSize.roads, fetchRoadTileRecursive));
+        if (data.elements.length === 0) {
+          return processRoads(await fetchDataTiled(bbox, perfConfig.overpassTileSize.roads, fetchRoadTileRecursive));
+        }
         return processRoads(data.elements);
-      } catch (_) {
+      } catch (err) {
         return processRoads(await fetchDataTiled(bbox, perfConfig.overpassTileSize.roads, fetchRoadTileRecursive));
       }
     } else {
@@ -248,9 +277,11 @@
     if (perfConfig.tryFullBboxFirst && !skipFullDownload) {
       try {
         const data = await runQueryWithRetry(buildingQueryBuilder(bbox), 1);
-        if (data.elements.length === 0) return fetchDataTiled(bbox, perfConfig.overpassTileSize.buildings, fetchBuildingTileRecursive);
+        if (data.elements.length === 0) {
+          return fetchDataTiled(bbox, perfConfig.overpassTileSize.buildings, fetchBuildingTileRecursive);
+        }
         return data.elements;
-      } catch (_) {
+      } catch (err) {
         return fetchDataTiled(bbox, perfConfig.overpassTileSize.buildings, fetchBuildingTileRecursive);
       }
     } else {
@@ -265,9 +296,11 @@
     if (perfConfig.tryFullBboxFirst && !skipFullDownload) {
       try {
         const data = await runQueryWithRetry(placesQueryBuilder(bbox), 1);
-        if (data.elements.length === 0) return fetchDataTiled(bbox, perfConfig.overpassTileSize.places, fetchPlaceTileRecursive);
+        if (data.elements.length === 0) {
+          return fetchDataTiled(bbox, perfConfig.overpassTileSize.places, fetchPlaceTileRecursive);
+        }
         return data.elements;
-      } catch (_) {
+      } catch (err) {
         return fetchDataTiled(bbox, perfConfig.overpassTileSize.places, fetchPlaceTileRecursive);
       }
     } else {
@@ -290,8 +323,12 @@
   const writeJsonStream = async (filePath, data) => {
     return new Promise((resolve, reject) => {
       const writeStream = fs.createWriteStream(filePath, { encoding: 'utf8', highWaterMark: 1024 * 1024 });
-      writeStream.on('error', reject);
-      writeStream.on('finish', resolve);
+      writeStream.on('error', (err) => {
+        reject(err);
+      });
+      writeStream.on('finish', () => {
+        resolve();
+      });
 
       const writeWithBackpressure = (chunk) => {
         return new Promise((resolveWrite) => {
@@ -346,12 +383,15 @@
 
     const convertedBoundingBox = convertBbox(place.bbox);
 
+    const startTime = Date.now();
     const roadData = await fetchRoadData(convertedBoundingBox);
     if (perfConfig.datasetDelay) await sleep(perfConfig.datasetDelay);
 
+    const startBuildings = Date.now();
     const buildingData = await fetchBuildingsData(convertedBoundingBox);
     if (perfConfig.datasetDelay) await sleep(perfConfig.datasetDelay);
 
+    const startPlaces = Date.now();
     const placesData = await fetchPlacesData(convertedBoundingBox);
 
     await writeJsonStream(`./raw-data/${place.code}/roads.geojson`, roadData);
@@ -359,12 +399,24 @@
     await writeMsgpackBinary(`./raw-data/${place.code}/places.msgpack`, placesData);
   };
 
-  if (!fs.existsSync('./raw-data')) fs.mkdirSync('./raw-data');
+  if (!fs.existsSync('./raw-data')) {
+    fs.mkdirSync('./raw-data');
+  }
 
   const limit = pLimit(perfConfig.maxConcurrentDownloads);
 
-  const tasks = config.places.map(place => limit(() => fetchAllData(place)));
+  const tasks = config.places.map(place => limit(async () => {
+    try {
+      await fetchAllData(place);
+    } catch (err) {
+      throw err;
+    }
+  }));
 
   Promise.all(tasks)
-    .then(() => process.exit(0))
-    .catch(() => process.exit(1));
+    .then(() => {
+      process.exit(0);
+    })
+    .catch((err) => {
+      process.exit(1);
+    });
