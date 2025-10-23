@@ -39,6 +39,7 @@ This node js application allows you to create custom maps for the game Subway Bu
 - **Custom city preview images** in the game menu
 - **Tested support** for Windows and Linux
 - **Custom insertion of cities** without basic one's from the game
+- **Better demand calculation** for your maps
 
 ## 🛠️ Installation
 If you need to use this patcher with an older version of the game, please check the [Releases page](https://github.com/bladistay/Subway-Builder-map-patcher/releases) for version-specific instructions and compatible patcher versions.
