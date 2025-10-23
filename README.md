@@ -27,7 +27,7 @@ This node js application allows you to create custom maps for the game Subway Bu
 
 **Known Working Configuration:**
 - ✅ **macOS** (fully tested)
-- 🔄 **Windows** (untested - needs verification)
+- ✅ **Windows** (tested, but may be some problems)
 - 🔄 **Linux** (untested - needs verification)
 
   If you successfully run this on Windows or Linux, please share your experience!
@@ -63,7 +63,7 @@ Replace these values in the file:
 ```js
 const config = {
     // Specify the path to Subway Builder game
-    "location": "C:\\Program Files\\Subway Builder\\Subway Builder.exe", // for Windows
+    "location": "C://Users/YOUR_USER/AppData/Local/Programs/Subway Builder/Subway Builder.exe", // for Windows
     // "location": "/usr/bin/subway-builder",                          // for Linux
     // "location": "/Applications/Subway Builder.app",                 // for macOS
     
@@ -131,9 +131,18 @@ node scripts/process-data.js
 node scripts/patch-game.js
 ```
 
+**It is NORMAL that scripts don't output anything during execution** - this is expected behavior:
+
+✅ No output = Everything is working correctly, wait till command prompt reappear and launch next script
+
+❌ Only errors are displayed - if something goes wrong
+
+⚠️ Some scripts may take several minutes with no visual feedback
+
 **5. Enjoy the game**
 
 Once all scripts finish successfully, check the build/ directory for your patched game files ready for distribution.
+You also can see the unpacked version in the root of patcher.
 
 ## 🤔 FAQ
 
@@ -144,5 +153,10 @@ Once all scripts finish successfully, check the build/ directory for your patche
     <img alt="Discord" src="https://img.shields.io/badge/Discord-Subway_Builder-7289da?logo=discord&logoColor=white&color=7289da" />
   </a>
 
-- **Issues**: Found a bug or have a feature request?  
-  → [Create an Issue](https://github.com/bladistay/Subway-Builder-map-patcher/issues)
+
+- **GitHub Issues**: Found a bug or have a feature request?  
+  → Create an issue ticket on our GitHub repository
+
+  <a href="https://github.com/bladistay/Subway-Builder-map-patcher/issues/new/choose" target="_blank">
+    <img alt="GitHub Issues" src="https://img.shields.io/badge/GitHub-Create_Issue-2088ff?logo=github&logoColor=white&color=2088ff" />
+  </a>
