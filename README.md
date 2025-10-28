@@ -44,7 +44,7 @@ This node js application allows you to create custom maps for the game Subway Bu
 ## 🛠️ Installation
 If you need to use this patcher with an older version of the game, please check the [Releases page](https://github.com/bladistay/Subway-Builder-map-patcher/releases) for version-specific instructions and compatible patcher versions.
 
-This installation guide is for the LATEST VERSION of both GAME and PATCHER:
+This installation guide is for the LATEST VERSION of both GAME and PATCHER that patcher supports:
 1.  **Clone the repository:**
     ```bash
     git clone https://github.com/bladistay/Subway-Builder-map-patcher.git
