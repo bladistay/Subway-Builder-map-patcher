@@ -1,3 +1,5 @@
+# 0.8.0 UPDATE IS ON THE WAY! The patcher currently works only on version 0.7.3.
+
 # Subway-Builder-map-patcher
 <div align="center">
   <img src="img/logo.png" alt="" width="800"/>
